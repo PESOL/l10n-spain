@@ -10,7 +10,15 @@ import json
 from odoo import _, api, fields, exceptions, models
 from requests import Session
 
+<<<<<<< HEAD
 from odoo.modules.registry import Registry
+=======
+from openerp import _, api, exceptions, fields, models, SUPERUSER_ID
+from openerp.modules.registry import RegistryManager
+from openerp.tools.float_utils import float_round, float_compare
+
+from openerp.tools import ustr
+>>>>>>> 51158bdd... Adaptations to SII version 1.1
 
 _logger = logging.getLogger(__name__)
 
@@ -39,14 +47,15 @@ SII_STATES = [
     ('cancelled', 'Cancelled'),
     ('cancelled_modified', 'Cancelled in SII but last modifications not sent'),
 ]
-SII_VERSION = '1.0'
-SII_START_DATE = '2017-07-01'
+SII_VERSION = '1.1'
+SII_START_DATE = '2018-07-01'
 SII_COUNTRY_CODE_MAPPING = {
     'RE': 'FR',
     'GP': 'FR',
     'MQ': 'FR',
     'GF': 'FR',
 }
+SII_MACRODATA_LIMIT = 100000.0
 
 
 class AccountInvoice(models.Model):
@@ -79,6 +88,16 @@ class AccountInvoice(models.Model):
             key = sii_key_obj.search(
                 [('code', '=', '01'), ('type', '=', 'sale')], limit=1)
         return key
+
+    @api.one
+    @api.depends('invoice_line.price_subtotal', 'tax_line.amount')
+    def _compute_amount(self):
+        super(AccountInvoice, self)._compute_amount()
+        self.sii_macrodata = True if float_compare(
+            self.amount_total,
+            SII_MACRODATA_LIMIT,
+            precision_digits=2
+        ) >= 0 else False
 
     sii_manual_description = fields.Text(
         string='SII manual description', size=500, copy=False,
@@ -158,6 +177,11 @@ class AccountInvoice(models.Model):
     )
     sii_property_cadastrial_code = fields.Char(
         string="Real property cadastrial code", size=25, copy=False,
+    )
+    sii_macrodata = fields.Boolean(
+        string="MacroData",
+        help="Check to confirm that the invoice has an absolute amount "
+             "greater o equal to 100 000,00 euros."
     )
     invoice_jobs_ids = fields.Many2many(
         comodel_name='queue.job', column1='invoice_id', column2='job_id',
@@ -669,7 +693,7 @@ class AccountInvoice(models.Model):
                 )[0:60],
                 "FechaExpedicionFacturaEmisor": invoice_date,
             },
-            "PeriodoImpositivo": {
+            "PeriodoLiquidacion": {
                 "Ejercicio": ejercicio,
                 "Periodo": periodo,
             },
@@ -690,6 +714,8 @@ class AccountInvoice(models.Model):
                 "TipoDesglose": self._get_sii_out_taxes(),
                 "ImporteTotal": abs(self.amount_total_company_signed) * sign,
             }
+            if self.sii_macrodata:
+                inv_dict["Macrodato"] = "S"
             if self.sii_registration_key_additional1:
                 inv_dict["FacturaExpedida"].\
                     update({'ClaveRegimenEspecialOTrascendenciaAdicional1': (
@@ -754,7 +780,7 @@ class AccountInvoice(models.Model):
                     (self.reference or '')[:60]
                 ),
                 "FechaExpedicionFacturaEmisor": invoice_date},
-            "PeriodoImpositivo": {
+            "PeriodoLiquidacion": {
                 "Ejercicio": ejercicio,
                 "Periodo": periodo
             },
@@ -790,6 +816,8 @@ class AccountInvoice(models.Model):
                 "ImporteTotal": abs(self.amount_total_company_signed) * sign,
                 "CuotaDeducible": round(tax_amount * sign, 2),
             }
+            if self.sii_macrodata:
+                inv_dict["Macrodato"] = "S"
             if self.sii_registration_key_additional1:
                 inv_dict["FacturaRecibida"].\
                     update({'ClaveRegimenEspecialOTrascendenciaAdicional1': (

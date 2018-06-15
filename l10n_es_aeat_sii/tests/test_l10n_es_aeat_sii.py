@@ -141,10 +141,16 @@ class TestL10nEsAeatSii(common.SavepointCase):
                 'ClaveRegimenEspecialOTrascendencia': special_regime,
                 'ImporteTotal': 110,
             },
+<<<<<<< HEAD
             'PeriodoImpositivo': {
                 'Periodo': '%02d' % fields.Date.from_string(
                     fields.Date.today()).month,
                 'Ejercicio': fields.Date.from_string(fields.Date.today()).year,
+=======
+            'PeriodoLiquidacion': {
+                'Periodo': str(self.invoice.period_id.code[:2]),
+                'Ejercicio': int(self.invoice.period_id.code[-4:])
+>>>>>>> 8ad1f635... Updated tests.
             }
         }
         if self.invoice.type in ['out_invoice', 'out_refund']:

@@ -470,6 +470,7 @@ class AccountInvoice(models.Model):
                 tax_breakdown = taxes_dict.setdefault(
                     'DesgloseFactura', {},
                 )
+<<<<<<< HEAD
             if tax in (taxes_sfesb + taxes_sfesbe + taxes_sfesisp):
                 sub_dict = tax_breakdown.setdefault('Sujeta', {})
                 # TODO l10n_es no tiene impuesto exento de bienes
@@ -493,6 +494,27 @@ class AccountInvoice(models.Model):
                     not_ex_type = sub_dict['NoExenta']['TipoNoExenta']
                     if tax in taxes_sfesisp:
                         is_s3 = not_ex_type == 'S1'
+=======
+                if tax_line in breakdown_taxes:
+                    tax_breakdown = taxes_dict.setdefault(
+                        'DesgloseFactura', {},
+                    )
+                if tax_line in (taxes_sfesb + taxes_sfesbe + taxes_sfesisp):
+                    sub_dict = tax_breakdown.setdefault('Sujeta', {})
+                    # TODO l10n_es no tiene impuesto exento de bienes
+                    # corrientes nacionales
+                    ex_taxes = taxes_sfesbe
+                    if tax_line in ex_taxes:
+                        det_dict = sub_dict.setdefault('Exenta', {})
+                        det_dict.setdefault('DetalleExenta',
+                                            {'BaseImponible': 0})
+                        if exempt_cause:
+                            det_dict['DetalleExenta'][
+                                'CausaExencion'] = exempt_cause
+                        det_dict['DetalleExenta']['BaseImponible'] += (
+                            inv_line._get_sii_line_price_subtotal()
+                        )
+>>>>>>> f94fe837... Añadir nueva etiqueta DetalleExenta en facturas de ventas con impuestos exentos
                     else:
                         is_s3 = not_ex_type == 'S2'
                     if is_s3:
@@ -549,6 +571,83 @@ class AccountInvoice(models.Model):
                     nsub_dict['ImporteTAIReglasLocalizacion'] += (
                         tax_line.base * sign
                     )
+<<<<<<< HEAD
+=======
+                    if tax_line in (taxes_sfesse + taxes_sfess):
+                        type_breakdown['PrestacionServicios'].setdefault(
+                            'Sujeta', {}
+                        )
+                    service_dict = type_breakdown['PrestacionServicios']
+                    if tax_line in taxes_sfesse:
+                        exempt_dict = service_dict['Sujeta'].setdefault(
+                            'Exenta', {'BaseImponible': 0},
+                        )
+                        if exempt_cause:
+                            exempt_dict['CausaExencion'] = exempt_cause
+                        exempt_dict['BaseImponible'] += inv_line.\
+                            _get_sii_line_price_subtotal()
+                    if tax_line in taxes_sfess:
+                        # TODO l10n_es_ no tiene impuesto ISP de servicios
+                        # if tax_line in taxes_sfesisps:
+                        #     TipoNoExenta = 'S2'
+                        # else:
+                        service_dict['Sujeta'].setdefault(
+                            'NoExenta', {
+                                'TipoNoExenta': 'S1',
+                                'DesgloseIVA': {
+                                    'DetalleIVA': [],
+                                },
+                            },
+                        )
+                        inv_line._update_sii_tax_line(taxes_to, tax_line)
+                    if tax_line in taxes_sfesns:
+                        nsub_dict = service_dict.setdefault(
+                            'NoSujeta', {'ImporteTAIReglasLocalizacion': 0},
+                        )
+                        nsub_dict['ImporteTAIReglasLocalizacion'] += (
+                            inv_line._get_sii_line_price_subtotal() * sign
+                        )
+        for val in taxes_f.values() + taxes_to.values():
+            val['CuotaRepercutida'] = round(
+                float_round(val['CuotaRepercutida'] * sign, 2), 2)
+            val['BaseImponible'] = round(
+                float_round(val['BaseImponible'] * sign, 2), 2)
+            if 'CuotaRecargoEquivalencia' in val:
+                val['CuotaRecargoEquivalencia'] = round(
+                    float_round(val['CuotaRecargoEquivalencia'] * sign, 2), 2)
+        if taxes_f:
+            breakdown = tax_breakdown['Sujeta']['NoExenta']['DesgloseIVA']
+            breakdown['DetalleIVA'] = taxes_f.values()
+        if taxes_to:
+            sub = type_breakdown['PrestacionServicios']['Sujeta']
+            sub['NoExenta']['DesgloseIVA']['DetalleIVA'] = taxes_to.values()
+        if 'Sujeta' in tax_breakdown and 'Exenta' in tax_breakdown['Sujeta']:
+            exempt_dict = tax_breakdown['Sujeta']['Exenta']['DetalleExenta']
+            exempt_dict['BaseImponible'] = \
+                round(
+                    float_round(exempt_dict['BaseImponible'] * sign, 2), 2)
+        if 'NoSujeta' in tax_breakdown:
+            nsub_dict = tax_breakdown['NoSujeta']
+            nsub_dict[default_no_taxable_cause] = \
+                round(
+                    float_round(nsub_dict[default_no_taxable_cause] * sign, 2),
+                    2)
+        if type_breakdown:
+            services_dict = type_breakdown['PrestacionServicios']
+            if 'Sujeta' in services_dict \
+                    and 'Exenta' in services_dict['Sujeta']:
+                exempt_dict = services_dict['Sujeta']['Exenta']['DetalleExenta']
+                exempt_dict['BaseImponible'] = \
+                    round(
+                        float_round(exempt_dict['BaseImponible'] * sign, 2), 2)
+            if 'NoSujeta' in services_dict:
+                nsub_dict = services_dict['NoSujeta']
+                nsub_dict["ImporteTAIReglasLocalizacion"] = \
+                    round(
+                        float_round(nsub_dict["ImporteTAIReglasLocalizacion"] *
+                                    sign, 2), 2)
+
+>>>>>>> f94fe837... Añadir nueva etiqueta DetalleExenta en facturas de ventas con impuestos exentos
         # Ajustes finales breakdown
         # - DesgloseFactura y DesgloseTipoOperacion son excluyentes
         # - Ciertos condicionantes obligan DesgloseTipoOperacion

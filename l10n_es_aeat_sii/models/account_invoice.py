@@ -35,8 +35,11 @@ except ImportError:
     _logger.debug('Can not `import queue_job`.')
     import functools
 
+
     def empty_decorator_factory(*argv, **kwargs):
         return functools.partial
+
+
     job = empty_decorator_factory
 
 SII_STATES = [
@@ -48,14 +51,14 @@ SII_STATES = [
     ('cancelled_modified', 'Cancelled in SII but last modifications not sent'),
 ]
 SII_VERSION = '1.1'
-SII_START_DATE = '2018-07-01'
+SII_START_DATE = '2017-07-01'
 SII_COUNTRY_CODE_MAPPING = {
     'RE': 'FR',
     'GP': 'FR',
     'MQ': 'FR',
     'GF': 'FR',
 }
-SII_MACRODATA_LIMIT = 100000.0
+SII_MACRODATA_LIMIT = 100000000.0
 
 
 class AccountInvoice(models.Model):
@@ -88,16 +91,6 @@ class AccountInvoice(models.Model):
             key = sii_key_obj.search(
                 [('code', '=', '01'), ('type', '=', 'sale')], limit=1)
         return key
-
-    @api.depends('invoice_line.price_subtotal', 'tax_line.amount')
-    def _compute_amount(self):
-        for inv in self:
-            super(AccountInvoice, inv)._compute_amount()
-            inv.sii_macrodata = True if float_compare(
-                inv.amount_total,
-                SII_MACRODATA_LIMIT,
-                precision_digits=2
-            ) >= 0 else False
 
     sii_manual_description = fields.Text(
         string='SII manual description', size=500, copy=False,
@@ -181,12 +174,22 @@ class AccountInvoice(models.Model):
     sii_macrodata = fields.Boolean(
         string="MacroData",
         help="Check to confirm that the invoice has an absolute amount "
-             "greater o equal to 100 000,00 euros."
+             "greater o equal to 100 000 000,00 euros.",
+        compute='_compute_macrodata', store=True
     )
     invoice_jobs_ids = fields.Many2many(
         comodel_name='queue.job', column1='invoice_id', column2='job_id',
         string="Connector Jobs", copy=False,
     )
+
+    @api.depends('amount_total')
+    def _compute_macrodata(self):
+        for inv in self:
+            inv.sii_macrodata = True if float_compare(
+                inv.amount_total,
+                SII_MACRODATA_LIMIT,
+                precision_digits=2
+            ) >= 0 else False
 
     @api.onchange('sii_refund_type')
     def onchange_sii_refund_type(self):
@@ -241,7 +244,7 @@ class AccountInvoice(models.Model):
                               "already registered at the SII. You must cancel "
                               "the invoice and create a new one with the "
                               "correct supplier")
-                            )
+                        )
                 elif 'supplier_invoice_number' in vals:
                     raise exceptions.Warning(
                         _("You cannot change the supplier invoice number of "
@@ -435,12 +438,85 @@ class AccountInvoice(models.Model):
             # with 'IDOtro' in the SII identifier block
             return True
         elif (sii_gen_type == 1 and
-                (self.partner_id.vat or '').startswith('ESN')):
+              (self.partner_id.vat or '').startswith('ESN')):
             # DesgloseTipoOperacion required if customer's country is Spain and
             # has a NIF which starts with 'N'
             return True
         return False
 
+<<<<<<< HEAD
+=======
+    @api.model
+    def _sii_adjust_first_semester(self, taxes_dict):
+        if 'DesgloseFactura' in taxes_dict:
+            tax_breakdown = taxes_dict['DesgloseFactura']
+            if 'NoSujeta' in tax_breakdown:
+                del tax_breakdown['NoSujeta']
+            if 'Sujeta' not in tax_breakdown:
+                sub_dict = tax_breakdown.setdefault('Sujeta', {})
+                sub_dict.setdefault(
+                    'NoExenta', {
+                        'TipoNoExenta': 'S1',
+                        'DesgloseIVA': {
+                            'DetalleIVA': [{
+                                "BaseImponible": 0,
+                                "CuotaRepercutida": 0,
+                                "TipoImpositivo": "0",
+                                "CuotaSoportada": 0}]}
+                    })
+            elif 'Exenta' in tax_breakdown['Sujeta']:
+                BI = tax_breakdown['Sujeta']['Exenta']['BaseImponible']
+                del tax_breakdown['Sujeta']['Exenta']
+                tax_breakdown['Sujeta'].setdefault(
+                    'NoExenta', {
+                        'TipoNoExenta': 'S1',
+                        'DesgloseIVA': {
+                            'DetalleIVA': [{
+                                "BaseImponible": BI,
+                                "CuotaRepercutida": 0,
+                                "TipoImpositivo": "0",
+                                "CuotaSoportada": 0}]}})
+
+        if 'DesgloseTipoOperacion' in taxes_dict:
+            type_breakdown = taxes_dict['DesgloseTipoOperacion']
+            # key puede ser PrestacionServicios, Entrega o ambas
+            keys = type_breakdown.keys()
+            for key in keys:
+                if 'NoSujeta' in type_breakdown[key]:
+                    del type_breakdown[key]['NoSujeta']
+                if 'Sujeta' not in type_breakdown[key]:
+                    sub_dict = type_breakdown[key].setdefault('Sujeta', {})
+                    sub_dict.setdefault(
+                        'NoExenta', {
+                            'TipoNoExenta': 'S1',
+                            'DesgloseIVA': {
+                                'DetalleIVA': [{
+                                    "BaseImponible": 0,
+                                    "CuotaRepercutida": 0,
+                                    "TipoImpositivo": "0",
+                                    "CuotaSoportada": 0}],
+                            },
+                        },
+                    )
+                elif 'Exenta' in type_breakdown[key]['Sujeta']:
+                    BI = type_breakdown[key]['Sujeta']['Exenta'][
+                        'BaseImponible']
+                    del type_breakdown[key]['Sujeta']['Exenta']
+                    type_breakdown[key]['Sujeta'].setdefault(
+                        'NoExenta', {
+                            'TipoNoExenta': 'S1',
+                            'DesgloseIVA': {
+                                'DetalleIVA': [{
+                                    "BaseImponible": BI,
+                                    "CuotaRepercutida": 0,
+                                    "TipoImpositivo": "0",
+                                    "CuotaSoportada": 0}],
+                            },
+                        },
+                    )
+        return taxes_dict
+
+>>>>>>> b2a491d2... Cambios solicitados
     @api.multi
     def _get_sii_out_taxes(self):
         """Get the taxes for sales invoices.
@@ -460,6 +536,7 @@ class AccountInvoice(models.Model):
         default_no_taxable_cause = self._get_no_taxable_cause()
         # Check if refund type is 'By differences'. Negative amounts!
         sign = self._get_sii_sign()
+<<<<<<< HEAD
         exempt_cause = self._get_sii_exempt_cause()
         for tax_line in self.tax_line_ids:
             tax = tax_line.tax_id
@@ -469,6 +546,13 @@ class AccountInvoice(models.Model):
             if tax in breakdown_taxes:
                 tax_breakdown = taxes_dict.setdefault(
                     'DesgloseFactura', {},
+=======
+        for inv_line in self.invoice_line:
+            exempt_cause = self._get_sii_exempt_cause(inv_line.product_id)
+            for tax_line in inv_line.invoice_line_tax_id:
+                breakdown_taxes = (
+                        taxes_sfesb + taxes_sfesisp + taxes_sfens + taxes_sfesbe
+>>>>>>> b2a491d2... Cambios solicitados
                 )
 <<<<<<< HEAD
             if tax in (taxes_sfesb + taxes_sfesbe + taxes_sfesisp):
@@ -505,16 +589,23 @@ class AccountInvoice(models.Model):
                     # corrientes nacionales
                     ex_taxes = taxes_sfesbe
                     if tax_line in ex_taxes:
-                        det_dict = sub_dict.setdefault('Exenta', {})
-                        det_dict.setdefault('DetalleExenta',
-                                            {'BaseImponible': 0})
+                        sub_dict = sub_dict.setdefault('Exenta',
+                                                       {'DetalleExenta': []})
+                        det_dict = {'BaseImponible':
+                                    inv_line._get_sii_line_price_subtotal()
+                                    }
                         if exempt_cause:
+<<<<<<< HEAD
                             det_dict['DetalleExenta'][
                                 'CausaExencion'] = exempt_cause
                         det_dict['DetalleExenta']['BaseImponible'] += (
                             inv_line._get_sii_line_price_subtotal()
                         )
 >>>>>>> f94fe837... Añadir nueva etiqueta DetalleExenta en facturas de ventas con impuestos exentos
+=======
+                            det_dict['CausaExencion'] = exempt_cause
+                        sub_dict['DetalleExenta'].append(det_dict)
+>>>>>>> b2a491d2... Cambios solicitados
                     else:
                         is_s3 = not_ex_type == 'S2'
                     if is_s3:
@@ -577,18 +668,18 @@ class AccountInvoice(models.Model):
                         type_breakdown['PrestacionServicios'].setdefault(
                             'Sujeta', {}
                         )
-                    service_dict = type_breakdown['PrestacionServicios']
+                    service_dict = type_breakdown[
+                        'PrestacionServicios']['Sujeta']
                     if tax_line in taxes_sfesse:
-                        exempt_dict = service_dict.setdefault('Exenta', {})
-                        exempt_dict.setdefault(
-                            'DetalleExenta',
-                            {'BaseImponible': 0}
-                        )
+                        service_dict = service_dict.setdefault(
+                            'Exenta',
+                            {'DetalleExenta': []})
+                        det_dict = {'BaseImponible':
+                                    inv_line._get_sii_line_price_subtotal()
+                                    }
                         if exempt_cause:
-                            exempt_dict['DetalleExenta'][
-                                'CausaExencion'] = exempt_cause
-                        exempt_dict['DetalleExenta']['BaseImponible'] += (
-                            inv_line._get_sii_line_price_subtotal())
+                            det_dict['CausaExencion'] = exempt_cause
+                        service_dict['DetalleExenta'].append(det_dict)
                     if tax_line in taxes_sfess:
                         # TODO l10n_es_ no tiene impuesto ISP de servicios
                         # if tax_line in taxes_sfesisps:
@@ -608,7 +699,7 @@ class AccountInvoice(models.Model):
                             'NoSujeta', {'ImporteTAIReglasLocalizacion': 0},
                         )
                         nsub_dict['ImporteTAIReglasLocalizacion'] += (
-                            inv_line._get_sii_line_price_subtotal() * sign
+                                inv_line._get_sii_line_price_subtotal() * sign
                         )
         for val in taxes_f.values() + taxes_to.values():
             val['CuotaRepercutida'] = round(
@@ -626,9 +717,10 @@ class AccountInvoice(models.Model):
             sub['NoExenta']['DesgloseIVA']['DetalleIVA'] = taxes_to.values()
         if 'Sujeta' in tax_breakdown and 'Exenta' in tax_breakdown['Sujeta']:
             exempt_dict = tax_breakdown['Sujeta']['Exenta']['DetalleExenta']
-            exempt_dict['BaseImponible'] = \
-                round(
-                    float_round(exempt_dict['BaseImponible'] * sign, 2), 2)
+            for line in exempt_dict:
+                line['BaseImponible'] = \
+                    round(
+                        float_round(line['BaseImponible'] * sign, 2), 2)
         if 'NoSujeta' in tax_breakdown:
             nsub_dict = tax_breakdown['NoSujeta']
             nsub_dict[default_no_taxable_cause] = \
@@ -640,9 +732,11 @@ class AccountInvoice(models.Model):
             if 'Sujeta' in services_dict \
                     and 'Exenta' in services_dict['Sujeta']:
                 exempt_dict = services_dict['Sujeta']['Exenta']['DetalleExenta']
-                exempt_dict['BaseImponible'] = \
-                    round(
-                        float_round(exempt_dict['BaseImponible'] * sign, 2), 2)
+                for line in exempt_dict:
+                    line['BaseImponible'] = \
+                        round(
+                            float_round(
+                                line['BaseImponible'] * sign, 2), 2)
             if 'NoSujeta' in services_dict:
                 nsub_dict = services_dict['NoSujeta']
                 nsub_dict["ImporteTAIReglasLocalizacion"] = \
@@ -677,6 +771,7 @@ class AccountInvoice(models.Model):
         tax_amount = 0.0
         # Check if refund type is 'By differences'. Negative amounts!
         sign = self._get_sii_sign()
+<<<<<<< HEAD
         for tax_line in self.tax_line_ids:
             tax = tax_line.tax_id
             if tax in taxes_sfrisp:
@@ -708,6 +803,56 @@ class AccountInvoice(models.Model):
                 )
                 tax_dict = self._get_sii_tax_dict(tax_line, sign)
                 tax_dict['PorcentCompensacionREAGYP'] = tax_dict.pop(
+=======
+        for inv_line in self.invoice_line:
+            for tax_line in inv_line.invoice_line_tax_id:
+                if tax_line in taxes_sfrisp:
+                    inv_line._update_sii_tax_line(taxes_isp, tax_line)
+                elif tax_line in taxes_sfrs:
+                    inv_line._update_sii_tax_line(taxes_f, tax_line)
+                elif tax_line in taxes_sfrns:
+                    taxes_ns.setdefault('no_sujeto', {'BaseImponible': 0}, )
+                    taxes_ns['no_sujeto']['BaseImponible'] += inv_line. \
+                        _get_sii_line_price_subtotal()
+                elif tax_line in taxes_sfrsa:
+                    inv_line._update_sii_tax_line(taxes_fa, tax_line)
+                elif tax_line in taxes_sfrnd:
+                    inv_line._update_sii_tax_line(taxes_nd, tax_line)
+        if taxes_isp:
+            taxes_dict.setdefault(
+                'InversionSujetoPasivo', {'DetalleIVA': taxes_isp.values()},
+            )
+        if taxes_f or taxes_ns or taxes_nd:
+            taxes_dict.setdefault(
+                'DesgloseIVA', {'DetalleIVA': (taxes_f.values() +
+                                               taxes_ns.values() +
+                                               taxes_nd.values())},
+            )
+        for val in taxes_isp.values() + taxes_f.values() + taxes_fa.values():
+            val['CuotaSoportada'] = round(
+                float_round(val['CuotaSoportada'] * sign, 2), 2)
+            val['BaseImponible'] = round(
+                float_round(val['BaseImponible'] * sign, 2), 2)
+            if 'CuotaRecargoEquivalencia' in val:
+                val['CuotaRecargoEquivalencia'] = round(
+                    float_round(val['CuotaRecargoEquivalencia'] * sign, 2), 2)
+            tax_amount += val['CuotaSoportada']
+        for val in taxes_nd.values():
+            val['CuotaSoportada'] = round(
+                float_round(val['CuotaSoportada'] * sign, 2), 2)
+            val['BaseImponible'] = round(
+                float_round(val['BaseImponible'] * sign, 2), 2)
+            if 'CuotaRecargoEquivalencia' in val:
+                val['CuotaRecargoEquivalencia'] = round(
+                    float_round(val['CuotaRecargoEquivalencia'] * sign, 2), 2)
+        for reg in taxes_ns.values():
+            reg['BaseImponible'] = round(
+                float_round(reg['BaseImponible'] * sign, 2), 2)
+        if taxes_fa:
+            # Régimen especial agricultura - Cambiar claves
+            for tax_fa in taxes_fa.values():
+                tax_fa['PorcentCompensacionREAGYP'] = tax_fa.pop(
+>>>>>>> b2a491d2... Cambios solicitados
                     'TipoImpositivo'
                 )
                 tax_dict['ImporteCompensacionREAGYP'] = tax_dict.pop(
@@ -752,7 +897,12 @@ class AccountInvoice(models.Model):
             raise exceptions.Warning(
                 _("This invoice is not SII enabled.")
             )
+<<<<<<< HEAD
         if not self.reference and self.type in ['in_invoice', 'in_refund']:
+=======
+        if not self.supplier_invoice_number \
+                and self.type in ['in_invoice', 'in_refund']:
+>>>>>>> b2a491d2... Cambios solicitados
             raise exceptions.Warning(
                 _("The supplier number invoice is required")
             )
@@ -791,8 +941,14 @@ class AccountInvoice(models.Model):
                 },
                 # On cancelled invoices, number is not filled
                 "NumSerieFacturaEmisor": (
+<<<<<<< HEAD
                     self.number or self.move_name or ''
                 )[0:60],
+=======
+                                                 self.number or
+                                                 self.internal_number or ''
+                                         )[0:60],
+>>>>>>> b2a491d2... Cambios solicitados
                 "FechaExpedicionFacturaEmisor": invoice_date,
             },
             "PeriodoLiquidacion": {
@@ -819,19 +975,19 @@ class AccountInvoice(models.Model):
             if self.sii_macrodata:
                 inv_dict["Macrodato"] = "S"
             if self.sii_registration_key_additional1:
-                inv_dict["FacturaExpedida"].\
+                inv_dict["FacturaExpedida"]. \
                     update({'ClaveRegimenEspecialOTrascendenciaAdicional1': (
-                        self.sii_registration_key_additional1.code)})
+                    self.sii_registration_key_additional1.code)})
             if self.sii_registration_key_additional2:
-                inv_dict["FacturaExpedida"].\
+                inv_dict["FacturaExpedida"]. \
                     update({'ClaveRegimenEspecialOTrascendenciaAdicional2': (
-                        self.sii_registration_key_additional2.code)})
+                    self.sii_registration_key_additional2.code)})
             if self.sii_registration_key.code in ['12', '13']:
                 inv_dict["FacturaExpedida"]['DatosInmueble'] = {
                     'DetalleInmueble': {
                         'SituacionInmueble': self.sii_property_location,
                         'ReferenciaCatastral': (
-                            self.sii_property_cadastrial_code or '')
+                                self.sii_property_cadastrial_code or '')
                     }
                 }
             exp_dict = inv_dict['FacturaExpedida']
@@ -847,8 +1003,14 @@ class AccountInvoice(models.Model):
                 origin = self.refund_invoice_id
                 if self.sii_refund_type == 'S':
                     exp_dict['ImporteRectificacion'] = {
+<<<<<<< HEAD
                         'BaseRectificada': round(
                             abs(origin.amount_untaxed_signed), 2,
+=======
+                        'BaseRectificada': sum(
+                            self.
+                                mapped('origin_invoices_ids.cc_amount_untaxed')
+>>>>>>> b2a491d2... Cambios solicitados
                         ),
                         'CuotaRectificada': round(
                             abs(
@@ -894,7 +1056,7 @@ class AccountInvoice(models.Model):
             inv_dict['IDFactura']['IDEmisorFactura'].update(
                 {'NombreRazon': (
                     self.partner_id.commercial_partner_id.name[0:120]
-                    )}
+                )}
             )
         else:
             # Check if refund type is 'By differences'. Negative amounts!
@@ -915,19 +1077,26 @@ class AccountInvoice(models.Model):
                     )
                 },
                 "FechaRegContable": reg_date,
+<<<<<<< HEAD
                 "ImporteTotal": abs(self.amount_total_company_signed) * sign,
                 "CuotaDeducible": round(tax_amount * sign, 2),
+=======
+                "ImporteTotal": self.cc_amount_total * sign,
+                "CuotaDeducible": self.period_id.date_start >=
+                                  SII_START_DATE and round(
+                    float_round(tax_amount * sign, 2), 2) or 0.0,
+>>>>>>> b2a491d2... Cambios solicitados
             }
             if self.sii_macrodata:
                 inv_dict["Macrodato"] = "S"
             if self.sii_registration_key_additional1:
-                inv_dict["FacturaRecibida"].\
+                inv_dict["FacturaRecibida"]. \
                     update({'ClaveRegimenEspecialOTrascendenciaAdicional1': (
-                        self.sii_registration_key_additional1.code)})
+                    self.sii_registration_key_additional1.code)})
             if self.sii_registration_key_additional2:
-                inv_dict["FacturaRecibida"].\
+                inv_dict["FacturaRecibida"]. \
                     update({'ClaveRegimenEspecialOTrascendenciaAdicional2': (
-                        self.sii_registration_key_additional2.code)})
+                    self.sii_registration_key_additional2.code)})
             # Uso condicional de IDOtro/NIF
             inv_dict['FacturaRecibida']['Contraparte'].update(ident)
             if self.type == 'in_refund':
@@ -938,8 +1107,14 @@ class AccountInvoice(models.Model):
                 )
                 if self.sii_refund_type == 'S':
                     rec_dict['ImporteRectificacion'] = {
+<<<<<<< HEAD
                         'BaseRectificada': abs(
                             self.refund_invoice_id.amount_untaxed_signed
+=======
+                        'BaseRectificada': sum(
+                            self.
+                                mapped('origin_invoices_ids.cc_amount_untaxed')
+>>>>>>> b2a491d2... Cambios solicitados
                         ),
                         'CuotaRectificada': refund_tax_amount,
                     }
@@ -1033,7 +1208,18 @@ class AccountInvoice(models.Model):
         # De momento evitamos enviar facturas del primer semestre si no estamos
         # en entorno de pruebas
         invoices = self.filtered(
+<<<<<<< HEAD
             lambda i: (i.company_id.sii_test or i.date >= SII_START_DATE)
+=======
+            lambda i: (
+                    i.company_id.sii_test or
+                    i.period_id.date_start >= SII_START_DATE or
+                    (i.sii_registration_key.type == 'sale' and
+                     i.sii_registration_key.code == '16') or
+                    (i.sii_registration_key.type == 'purchase' and
+                     i.sii_registration_key.code == '14')
+            )
+>>>>>>> b2a491d2... Cambios solicitados
         )
         queue_obj = self.env['queue.job'].sudo()
         for invoice in invoices:
@@ -1140,8 +1326,8 @@ class AccountInvoice(models.Model):
     def send_sii(self):
         invoices = self.filtered(
             lambda i: (
-                i.sii_enabled and i.state in ['open', 'paid'] and
-                i.sii_state not in ['sent', 'cancelled']
+                    i.sii_enabled and i.state in ['open', 'paid'] and
+                    i.sii_state not in ['sent', 'cancelled']
             )
         )
         if not invoices._cancel_invoice_jobs():
@@ -1356,8 +1542,13 @@ class AccountInvoice(models.Model):
     @api.multi
     def _get_no_taxable_cause(self):
         self.ensure_one()
+<<<<<<< HEAD
         return self.fiscal_position_id.sii_no_taxable_cause or \
             'ImportePorArticulos7_14_Otros'
+=======
+        return self.fiscal_position.sii_no_taxable_cause or \
+               'ImportePorArticulos7_14_Otros'
+>>>>>>> b2a491d2... Cambios solicitados
 
     def is_sii_invoice(self):
         """Hook method to be overridden in additional modules to verify
@@ -1372,8 +1563,8 @@ class AccountInvoice(models.Model):
     def _get_sii_country_code(self):
         self.ensure_one()
         country_code = (
-            self.partner_id.commercial_partner_id.country_id.code or
-            (self.partner_id.vat or '')[:2]
+                self.partner_id.commercial_partner_id.country_id.code or
+                (self.partner_id.vat or '')[:2]
         ).upper()
         return SII_COUNTRY_CODE_MAPPING.get(country_code, country_code)
 
@@ -1390,7 +1581,7 @@ class AccountInvoice(models.Model):
                 description += (invoice.company_id.sii_description or '/')
             elif method == 'manual':
                 description = (
-                    invoice.sii_manual_description or description or '/'
+                        invoice.sii_manual_description or description or '/'
                 )
             else:  # auto method
                 if invoice.invoice_line_ids:
@@ -1414,9 +1605,15 @@ class AccountInvoice(models.Model):
         for invoice in self:
             if invoice.company_id.sii_enabled:
                 invoice.sii_enabled = (
+<<<<<<< HEAD
                     (invoice.fiscal_position_id and
                      invoice.fiscal_position_id.sii_active) or
                     not invoice.fiscal_position_id
+=======
+                        (invoice.fiscal_position and
+                         invoice.fiscal_position.sii_active) or
+                        not invoice.fiscal_position
+>>>>>>> b2a491d2... Cambios solicitados
                 )
             else:
                 invoice.sii_enabled = False
@@ -1447,8 +1644,25 @@ class AccountInvoice(models.Model):
 
     @job(default_channel='root.invoice_validate_sii')
     @api.multi
+<<<<<<< HEAD
     def confirm_one_invoice(self):
         self._send_invoice_to_sii()
+=======
+    def _get_sii_line_price_unit(self):
+        """Obtain the effective invoice line price after discount. This is
+        obtain through this method, as it can be inherited in other modules
+        for altering the expected amount according other criteria."""
+        self.ensure_one()
+        price_unit = self.price_unit * (1 - (self.discount or 0.0) / 100.0)
+        if self.invoice_id.currency_id != \
+                self.invoice_id.company_id.currency_id:
+            from_currency = self.invoice_id.currency_id. \
+                with_context(date=self.invoice_id.date_invoice)
+            price_unit = from_currency. \
+                compute(price_unit, self.invoice_id.company_id.currency_id,
+                        round=False)
+        return price_unit
+>>>>>>> b2a491d2... Cambios solicitados
 
     @job(default_channel='root.invoice_validate_sii')
     @api.multi

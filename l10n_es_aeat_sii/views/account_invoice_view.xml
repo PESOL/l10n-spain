@@ -20,11 +20,14 @@
                                 ('state', 'not in', ['cancel']),
                                 ('sii_state', 'not in', ['sent','sent_w_errors','sent_modified'])]}" />
                 </button>
+<<<<<<< HEAD
 
                 <field name="reference" position="attributes">
+=======
+                <field name="supplier_invoice_number" position="attributes">
+>>>>>>> b2a491d2... Cambios solicitados
                     <attribute name="attrs">{'required':[('state','not in',['open','paid','cancel'])]}</attribute>
                 </field>
-
                 <notebook position="inside">
                     <page string="SII" groups="account.group_account_invoice"  attrs="{'invisible': [('sii_enabled', '=', False)]}">
                         <group string="SII Information">
@@ -64,8 +67,7 @@
                                    options="{'reload_on_button': true}"
                                    nolabel="1"
                                    readonly="1"
-                                   context="{'tree_view_ref': 'l10n_es_aeat_sii.view_queue_job_sii'}"
-                            />
+                                   context="{'tree_view_ref': 'l10n_es_aeat_sii.view_queue_job_sii'}"/>
                         </group>
                     </page>
                 </notebook>
@@ -107,7 +109,6 @@
                                    attrs="{'invisible': [('sii_registration_key_code', 'not in', ['12', '13'])],
                                            'required': [('sii_registration_key_code', 'in', ['12', '13']), ('sii_property_location', 'in', ['1', '2'])]}"/>
                             <field name="sii_macrodata"/>
-
                         </group>
                         <group string="SII Result" groups="l10n_es_aeat.group_account_aeat">
                             <notebook>
@@ -133,9 +134,13 @@
                             <field name="invoice_jobs_ids"
                                    nolabel="1"
                                    readonly="1"
+<<<<<<< HEAD
                                    options="{'reload_on_button': true}"
                                    context="{'tree_view_ref': 'l10n_es_aeat_sii.view_queue_job_sii'}"
                             />
+=======
+                                   context="{'tree_view_ref': 'l10n_es_aeat_sii.view_queue_job_sii'}"/>
+>>>>>>> b2a491d2... Cambios solicitados
                         </group>
                     </page>
                 </notebook>

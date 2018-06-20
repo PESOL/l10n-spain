@@ -201,11 +201,15 @@ class TestL10nEsAeatSii(common.TransactionCase):
                     },
                 },
 <<<<<<< HEAD
+<<<<<<< HEAD
                 "CuotaDeducible": 10,
 =======
                 # "CuotaDeducible": self.invoice.cc_amount_tax,
                 "CuotaDeducible": 0.0,
 >>>>>>> 71ee8cf7... Updated tests.
+=======
+                "CuotaDeducible": self.invoice.cc_amount_tax,
+>>>>>>> b2a491d2... Cambios solicitados
             })
         if invoice_type == 'R4':
             res[expedida_recibida].update({
@@ -244,9 +248,12 @@ class TestL10nEsAeatSii(common.TransactionCase):
         invoices = self.invoice._get_sii_invoice_dict()
         test_in_invoice = self._get_invoices_test('F1', '01')
 <<<<<<< HEAD
+<<<<<<< HEAD
         for key in list(invoices.keys()):
 =======
         print invoices, test_in_invoice
+=======
+>>>>>>> b2a491d2... Cambios solicitados
         for key in invoices.keys():
 >>>>>>> 71ee8cf7... Updated tests.
             self.assertDictEqual(
@@ -301,6 +308,7 @@ class TestL10nEsAeatSii(common.TransactionCase):
             invoice_temp.sii_description, 'Test customer header | Test line',
         )
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     def test_permissions(self):
         """This should work without errors"""
@@ -369,3 +377,8 @@ class TestL10nEsAeatSii(common.TransactionCase):
     #     """This should work without errors"""
     #     self.invoice.sudo(self.user).signal_workflow('invoice_open')
 >>>>>>> 71ee8cf7... Updated tests.
+=======
+    def test_permissions(self):
+        """Test permissions"""
+        self.invoice.sudo(self.user).signal_workflow('invoice_open')
+>>>>>>> b2a491d2... Cambios solicitados

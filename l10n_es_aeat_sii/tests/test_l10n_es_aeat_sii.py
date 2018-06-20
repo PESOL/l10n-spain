@@ -156,7 +156,7 @@ class TestL10nEsAeatSii(common.TransactionCase):
                 'ImporteTotal': 110,
 =======
                 'DescripcionOperacion': u'/',
-                'ClaveRegimenEspecialOTrascendencia': unicode(special_regime),
+                'ClaveRegimenEspecialOTrascendencia': special_regime,
                 'ImporteTotal': self.invoice.cc_amount_total,
 >>>>>>> 71ee8cf7... Updated tests.
             },
